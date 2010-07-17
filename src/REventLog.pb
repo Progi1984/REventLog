@@ -1,16 +1,52 @@
-Import "C:\Program Files\PureBasic\Compilers\ObjectManager.lib"
-  Object_GetOrAllocateID (Objects, Object.l) As "_PB_Object_GetOrAllocateID@8"
-  Object_GetObject       (Objects, Object.l) As "_PB_Object_GetObject@8"
-  Object_IsObject        (Objects, Object.l) As "_PB_Object_IsObject@8"
-  Object_EnumerateAll    (Objects, ObjectEnumerateAllCallback, *VoidData) As "_PB_Object_EnumerateAll@12"
-  Object_EnumerateStart  (Objects) As "_PB_Object_EnumerateStart@4"
-  Object_EnumerateNext   (Objects, *object.Long) As "_PB_Object_EnumerateNext@8"
-  Object_EnumerateAbort  (Objects) As "_PB_Object_EnumerateAbort@4"
-  Object_FreeID          (Objects, Object.l) As "_PB_Object_FreeID@8"
-  Object_Init            (StructureSize.l, IncrementStep.l, ObjectFreeFunction) As "_PB_Object_Init@12"
-  Object_GetThreadMemory (MemoryID.l) As "_PB_Object_GetThreadMemory@4"
-  Object_InitThreadMemory(Size.l, InitFunction, EndFunction) As "_PB_Object_InitThreadMemory@12"
-EndImport
+  ; Macros for double quotes
+  Macro DQuote
+    "
+  EndMacro
+  ; Define the ImportLib
+  CompilerSelect #PB_Compiler_Thread
+    CompilerCase #False ;{ THREADSAFE : OFF
+      CompilerSelect #PB_Compiler_OS
+        CompilerCase #PB_OS_Linux         : #Power_ObjectManagerLib = #PB_Compiler_Home + "compilers/objectmanager.a"
+        CompilerCase #PB_OS_Windows   : #Power_ObjectManagerLib = #PB_Compiler_Home + "compilers\ObjectManager.lib"
+      CompilerEndSelect
+    ;}
+    CompilerCase #True ;{ THREADSAFE : ON
+      CompilerSelect #PB_Compiler_OS
+        CompilerCase #PB_OS_Linux         : #Power_ObjectManagerLib = #PB_Compiler_Home + "compilers/objectmanagerthread.a"
+        CompilerCase #PB_OS_Windows   : #Power_ObjectManagerLib = #PB_Compiler_Home + "compilers\ObjectManagerThread.lib"
+      CompilerEndSelect
+    ;}
+  CompilerEndSelect
+  ; Macro ImportFunction
+  CompilerSelect #PB_Compiler_OS
+    CompilerCase #PB_OS_Linux ;{
+      Macro ImportFunction(Name, Param)
+        DQuote#Name#DQuote
+      EndMacro
+    ;}
+    CompilerCase #PB_OS_Windows ;{
+      Macro ImportFunction(Name, Param)
+        DQuote _#Name@Param#DQuote
+      EndMacro
+    ;}
+  CompilerEndSelect
+  ; Import the ObjectManager library
+  CompilerSelect #PB_Compiler_OS
+    CompilerCase #PB_OS_Linux : ImportC #Power_ObjectManagerLib
+    CompilerCase #PB_OS_Windows : Import #Power_ObjectManagerLib
+  CompilerEndSelect
+    Object_GetOrAllocateID(Objects, Object.l) As ImportFunction(PB_Object_GetOrAllocateID, 8)
+    Object_GetObject(Objects, Object.l) As ImportFunction(PB_Object_GetObject,8)
+    Object_IsObject(Objects, Object.l) As ImportFunction(PB_Object_IsObject,8)
+    Object_EnumerateAll(Objects, ObjectEnumerateAllCallback, *VoidData) As ImportFunction(PB_Object_EnumerateAll,12)
+    Object_EnumerateStart(Objects) As ImportFunction(PB_Object_EnumerateStart,4)
+    Object_EnumerateNext(Objects, *object.Long) As ImportFunction(PB_Object_EnumerateNext,8)
+    Object_EnumerateAbort(Objects) As ImportFunction(PB_Object_EnumerateAbort,4)
+    Object_FreeID(Objects, Object.l) As ImportFunction(PB_Object_FreeID,8)
+    Object_Init(StructureSize.l, IncrementStep.l, ObjectFreeFunction) As ImportFunction(PB_Object_Init,12)
+    Object_GetThreadMemory(MemoryID.l) As ImportFunction(PB_Object_GetThreadMemory,4)
+    Object_InitThreadMemory(Size.l, InitFunction, EndFunction) As ImportFunction(PB_Object_InitThreadMemory,12)
+  EndImport
 
 ;{ Registry
   Procedure.l RMisc_KeyExists(topKey, sKeyName.s, ComputerName.s="")
@@ -104,11 +140,11 @@ EndImport
     EndIf
   EndProcedure
   Procedure.l RMisc_WriteMultiLineString(TopKey.l, KeyName.s, ValueName.s, Value.s); write a StringField, separate with #LF$, to specified ValueName
-  Protected Result.l, hKey.l, Error.l, dwDisposition.l, Mem.l, i.L, NumLF.L, LFPos.L
+  Protected Result.l, hKey.l, Error.l, plDisposition.l, Mem.l, i.L, NumLF.L, LFPos.L
   ;Reg_ResetError()
 
   If Right(KeyName, 1) = "\" : KeyName = Left(KeyName, Len(KeyName) - 1) : EndIf
-  Error = RegCreateKeyEx_(topKey, KeyName, 0, 0, #REG_OPTION_NON_VOLATILE, #KEY_ALL_ACCESS, 0, @hKey, @dwDisposition)
+  Error = RegCreateKeyEx_(topKey, KeyName, 0, 0, #REG_OPTION_NON_VOLATILE, #KEY_ALL_ACCESS, 0, @hKey, @plDisposition)
   If Error = #ERROR_SUCCESS
     Mem = AllocateMemory((MemoryStringLength(@Value) + 2) * SizeOf(Character))
     If Mem
@@ -182,7 +218,7 @@ EndProcedure
   EndProcedure
 ;}
 
-ProcedureDLL REventLog_Free(ID.l)
+ProcedureDLL.l REventLog_Free(ID.l)
   Global REventLogObjects
   Protected *RObject.S_REventLog
   If ID <> #PB_Any And REVENTLOG_IS(ID)
@@ -194,57 +230,53 @@ ProcedureDLL REventLog_Free(ID.l)
   EndIf
   ProcedureReturn #True
 EndProcedure
-Procedure REventLogFree(ID.l)
-  ProcedureReturn REventLog_Free(ID.l)
-EndProcedure
-ProcedureDLL REventLog_Init()
+ProcedureDLL.l REventLog_Init()
   Global REventLogObjects
-  REventLogObjects = REVENTLOG_INITIALIZE(@REventLogFree()) 
+  REventLogObjects = REVENTLOG_INITIALIZE(@REventLog_Free())
 EndProcedure
-ProcedureDLL REventLog_End()
+ProcedureDLL.l REventLog_End()
 EndProcedure
-ProcedureDLL REventLog_IsEventLog(ID.l)
+ProcedureDLL.l REventLog_IsEventLog(ID.l)
   ProcedureReturn REVENTLOG_IS(ID)
 EndProcedure
-
-ProcedureDLL REventLog_Create(ID.l)
+ProcedureDLL.l REventLog_Create(ID.l)
   Protected *RObject.S_REventLog = REVENTLOG_NEW(ID)
   With *RObject
     \hEventLog = -1
   EndWith
   ProcedureReturn *RObject
 EndProcedure
-ProcedureDLL REventLog_Load(ID.l, Filename.s, Name.s)
+ProcedureDLL.l REventLog_Load(ID.l, sFilename.s, sName.s)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
   If *RObject
     With *RObject
-      \hEventLog = OpenBackupEventLog_(@"", @Filename)
-      \LogName   = Name
+      \hEventLog  = OpenBackupEventLog_(@"", @sFilename)
+      \sLogName   = sName
       ProcedureReturn \hEventLog
     EndWith
   EndIf
   ProcedureReturn #False
 EndProcedure
-ProcedureDLL REventLog_Open(ID.l, Name.s)
+ProcedureDLL.l REventLog_Open(ID.l, sName.s)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
   If *RObject
     With *RObject
-      \hEventLog  = OpenEventLog_(0, Name)
-      \LogName    = Name
+      \hEventLog  = OpenEventLog_(0, sName)
+      \sLogName   = sName
       ProcedureReturn \hEventLog
     EndWith
   EndIf
   ProcedureReturn #False
 EndProcedure
-ProcedureDLL REventLog_Save(ID.l, Filename.s)
+ProcedureDLL.l REventLog_Save(ID.l, sFilename.s)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
   If *RObject
     With *RObject
-      ProcedureReturn BackupEventLog_(\hEventLog, Filename)
+      ProcedureReturn BackupEventLog_(\hEventLog, sFilename)
     EndWith
   EndIf
 EndProcedure
-ProcedureDLL REventLog_Clear(ID.l)
+ProcedureDLL.l REventLog_Clear(ID.l)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
   If *RObject
     With *RObject
@@ -252,16 +284,15 @@ ProcedureDLL REventLog_Clear(ID.l)
     EndWith
   EndIf
 EndProcedure
-
 ProcedureDLL.l REventLog_CountEvents(ID.l)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
-  Protected EventLogReadFlags.l, BufferLength.l, NbOfRecords.l
+  Protected plNumRecords.l
   If *RObject
     With *RObject
-      NbOfRecords       = 0
+      plNumRecords = 0
       If \hEventLog
-        If GetNumberOfEventLogRecords_(\hEventLog, @NbOfRecords)
-          ProcedureReturn NbOfRecords
+        If GetNumberOfEventLogRecords_(\hEventLog, @plNumRecords)
+          ProcedureReturn plNumRecords
         Else
           ProcedureReturn -1
         EndIf
@@ -271,289 +302,391 @@ ProcedureDLL.l REventLog_CountEvents(ID.l)
     EndWith
   EndIf
 EndProcedure
-Procedure.l REventLog_ReadEvent(ID.l, Num.l)
+ProcedureDLL.l REventLog_GetType(ID.l, Num.l)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
-  Protected pcbBytesNeeded.l, BytesWritten.l = 0, NeededBytes.l = 0
-  Protected Buffer
+  Protected pEventRecord.EVENTLOGRECORD
+  Protected plBytesToRead.l, plBytesRead.l = 0, plMinBytesToRead.l = 0
+  Protected *pMemBuffer
   If *RObject
     With *RObject
       If \hEventLog
-        pcbBytesNeeded = 5000 ; SizeOf(EVENTLOGRECORD)
-        If Buffer
-          FreeMemory(Buffer)
+        plBytesToRead = 5000 ; SizeOf(EVENTLOGRECORD)
+        If *pMemBuffer
+          FreeMemory(*pMemBuffer)
         EndIf
-        If \CurItemLog
-          FreeMemory(\CurItemLog)
-        EndIf
-        Buffer = AllocateMemory(pcbBytesNeeded)
-        ReadEventLog_(\hEventLog,#EVENTLOG_FORWARDS_READ|#EVENTLOG_SEEK_READ, Num, Buffer, pcbBytesNeeded, @BytesWritten, @NeededBytes)
-        \CurItemLog = Buffer
-        ProcedureReturn Buffer
+        *pMemBuffer = AllocateMemory(plBytesToRead)
+        ReadEventLog_(\hEventLog,#EVENTLOG_FORWARDS_READ|#EVENTLOG_SEEK_READ, Num, *pMemBuffer, plBytesToRead, @plBytesRead, @plMinBytesToRead)
+        CopyMemory(*pMemBuffer, pEventRecord, SizeOf(EVENTLOGRECORD))
+        ProcedureReturn pEventRecord\EventType
       Else
         ProcedureReturn -1
       EndIf
     EndWith
   EndIf
 EndProcedure
-ProcedureDLL.l REventLog_GetType(ID.l, Num.l)
-  Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
-  Protected EventRecord.EVENTLOGRECORD
-  If *RObject
-    With *RObject
-      REventLog_ReadEvent(ID, Num)
-      CopyMemory(\CurItemLog, EventRecord, SizeOf(EVENTLOGRECORD))
-      ProcedureReturn EventRecord\EventType
-    EndWith
-  EndIf
-EndProcedure
 ProcedureDLL.l REventLog_GetEventID(ID.l, Num.l)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
-  Protected EventRecord.EVENTLOGRECORD
+  Protected pEventRecord.EVENTLOGRECORD
+  Protected plBytesToRead.l, plBytesRead.l = 0, plMinBytesToRead.l = 0
+  Protected *pMemBuffer
   If *RObject
     With *RObject
-      REventLog_ReadEvent(ID, Num)
-      CopyMemory(\CurItemLog, EventRecord, SizeOf(EVENTLOGRECORD))
-      ProcedureReturn EventRecord\EventID
+      If \hEventLog
+        plBytesToRead = 5000 ; SizeOf(EVENTLOGRECORD)
+        If *pMemBuffer
+          FreeMemory(*pMemBuffer)
+        EndIf
+        *pMemBuffer = AllocateMemory(plBytesToRead)
+        ReadEventLog_(\hEventLog,#EVENTLOG_FORWARDS_READ|#EVENTLOG_SEEK_READ, Num, *pMemBuffer, plBytesToRead, @plBytesRead, @plMinBytesToRead)
+        CopyMemory(*pMemBuffer, pEventRecord, SizeOf(EVENTLOGRECORD))
+        ProcedureReturn pEventRecord\EventID
+      Else
+        ProcedureReturn -1
+      EndIf
     EndWith
   EndIf
 EndProcedure
 ProcedureDLL.l REventLog_GetTimeSubmitted(ID.l, Num.l)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
-  Protected EventRecord.EVENTLOGRECORD
-  Protected SystemTime.SYSTEMTIME
-  Protected LocalTime.SYSTEMTIME
-  Protected TimeBias.l
+  Protected pEventRecord.EVENTLOGRECORD
+  Protected plBytesToRead.l, plTimeBias.l, plBytesRead.l, plMinBytesToRead.l
+  Protected *pMemBuffer
+  Protected pSystemTime.SYSTEMTIME
+  Protected pLocalTime.SYSTEMTIME
   If *RObject
     With *RObject
-      REventLog_ReadEvent(ID, Num)
-      GetSystemTime_(SystemTime)
-      GetLocalTime_(LocalTime)
-      TimeBias = Date(SystemTime\wYear, SystemTime\wMonth, SystemTime\wDay, SystemTime\wHour, SystemTime\wMinute, SystemTime\wSecond) - Date(LocalTime\wYear, LocalTime\wMonth, LocalTime\wDay, LocalTime\wHour, LocalTime\wMinute, LocalTime\wSecond)
-      CopyMemory(\CurItemLog, EventRecord, SizeOf(EVENTLOGRECORD))
-      ProcedureReturn EventRecord\TimeGenerated - TimeBias
+      If \hEventLog
+        plBytesToRead     = 5000 ; SizeOf(EVENTLOGRECORD)
+        plBytesRead       = 0
+        plMinBytesToRead  = 0
+        If *pMemBuffer
+          FreeMemory(*pMemBuffer)
+        EndIf
+        *pMemBuffer = AllocateMemory(plBytesToRead)
+        ReadEventLog_(\hEventLog,#EVENTLOG_FORWARDS_READ|#EVENTLOG_SEEK_READ, Num, *pMemBuffer, plBytesToRead, @plBytesRead, @plMinBytesToRead)
+        CopyMemory(*pMemBuffer, pEventRecord, SizeOf(EVENTLOGRECORD))
+        GetSystemTime_(pSystemTime)
+        GetLocalTime_(pLocalTime)
+        plTimeBias = Date(pSystemTime\wYear, pSystemTime\wMonth, pSystemTime\wDay, pSystemTime\wHour, pSystemTime\wMinute, pSystemTime\wSecond) - Date(pLocalTime\wYear, pLocalTime\wMonth, pLocalTime\wDay, pLocalTime\wHour, pLocalTime\wMinute, pLocalTime\wSecond)
+        ProcedureReturn pEventRecord\TimeGenerated - plTimeBias
+      Else
+        ProcedureReturn -1
+      EndIf
     EndWith
   EndIf
 EndProcedure
 ProcedureDLL.l REventLog_GetTimeWritten(ID.l, Num.l)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
-  Protected EventRecord.EVENTLOGRECORD
-  Protected SystemTime.SYSTEMTIME
-  Protected LocalTime.SYSTEMTIME
-  Protected TimeBias.l
+  Protected pEventRecord.EVENTLOGRECORD
+  Protected plBytesToRead.l, plBytesRead.l, plMinBytesToRead.l
+  Protected *pMemBuffer
+  Protected pSystemTime.SYSTEMTIME
+  Protected pLocalTime.SYSTEMTIME
+  Protected plTimeBias.l
   If *RObject
     With *RObject
-      REventLog_ReadEvent(ID, Num)
-      GetSystemTime_(SystemTime)
-      GetLocalTime_(LocalTime)
-      TimeBias = Date(SystemTime\wYear, SystemTime\wMonth, SystemTime\wDay, SystemTime\wHour, SystemTime\wMinute, SystemTime\wSecond) - Date(LocalTime\wYear, LocalTime\wMonth, LocalTime\wDay, LocalTime\wHour, LocalTime\wMinute, LocalTime\wSecond)
-      CopyMemory(\CurItemLog, EventRecord, SizeOf(EVENTLOGRECORD))
-      ProcedureReturn EventRecord\TimeWritten - TimeBias
+      If \hEventLog
+        plBytesToRead     = 5000 ; SizeOf(EVENTLOGRECORD)
+        plBytesRead       = 0
+        plMinBytesToRead  = 0
+        If *pMemBuffer
+          FreeMemory(*pMemBuffer)
+        EndIf
+        *pMemBuffer = AllocateMemory(plBytesToRead)
+        ReadEventLog_(\hEventLog,#EVENTLOG_FORWARDS_READ|#EVENTLOG_SEEK_READ, Num, *pMemBuffer, plBytesToRead, @plBytesRead, @plMinBytesToRead)
+        CopyMemory(*pMemBuffer, pEventRecord, SizeOf(EVENTLOGRECORD))
+        GetSystemTime_(pSystemTime)
+        GetLocalTime_(pLocalTime)
+        plTimeBias = Date(pSystemTime\wYear, pSystemTime\wMonth, pSystemTime\wDay, pSystemTime\wHour, pSystemTime\wMinute, pSystemTime\wSecond) - Date(pLocalTime\wYear, pLocalTime\wMonth, pLocalTime\wDay, pLocalTime\wHour, pLocalTime\wMinute, pLocalTime\wSecond)
+        ProcedureReturn pEventRecord\TimeWritten - plTimeBias
+      Else
+        ProcedureReturn -1
+      EndIf
     EndWith
   EndIf
 EndProcedure
-
 ProcedureDLL.s REventLog_GetSourceName(ID.l, Num.l)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
-  Protected EventRecord.EVENTLOGRECORD
+  Protected pEventRecord.EVENTLOGRECORD
+  Protected plBytesToRead.l, plBytesRead.l, plMinBytesToRead.l
+  Protected *pMemBuffer
   If *RObject
     With *RObject
-      REventLog_ReadEvent(ID, Num)
-      CopyMemory(\CurItemLog, EventRecord, SizeOf(EVENTLOGRECORD))
-      ProcedureReturn PeekS(\CurItemLog+SizeOf(EVENTLOGRECORD))
+      If \hEventLog
+        plBytesToRead     = 5000 ; SizeOf(EVENTLOGRECORD)
+        plBytesRead       = 0
+        plMinBytesToRead  = 0
+        If *pMemBuffer
+          FreeMemory(*pMemBuffer)
+        EndIf
+        *pMemBuffer = AllocateMemory(plBytesToRead)
+        ReadEventLog_(\hEventLog,#EVENTLOG_FORWARDS_READ|#EVENTLOG_SEEK_READ, Num, *pMemBuffer, plBytesToRead, @plBytesRead, @plMinBytesToRead)
+        CopyMemory(*pMemBuffer, pEventRecord, SizeOf(EVENTLOGRECORD))
+        ProcedureReturn PeekS(*pMemBuffer + SizeOf(EVENTLOGRECORD))
+      Else
+        ProcedureReturn ""
+      EndIf
     EndWith
   EndIf
 EndProcedure
 ProcedureDLL.s REventLog_GetComputerName(ID.l, Num.l)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
-  Protected EventRecord.EVENTLOGRECORD
+  Protected pEventRecord.EVENTLOGRECORD
+  Protected plBytesToRead.l, plBytesRead.l, plMinBytesToRead.l, plResult.l
+  Protected psSrcName.s
+  Protected *pMemBuffer
   If *RObject
     With *RObject
-      REventLog_ReadEvent(ID, Num)
-      CopyMemory(\CurItemLog, EventRecord, SizeOf(EVENTLOGRECORD))
-      If #PB_Compiler_Unicode = #True
-        ProcedureReturn PeekS(\CurItemLog+SizeOf(EVENTLOGRECORD)+(1+Len(REventLog_GetSourceName(ID, Num)))*2,15)
+      If \hEventLog
+        plBytesToRead     = 5000 ; SizeOf(EVENTLOGRECORD)
+        plBytesRead       = 0
+        plMinBytesToRead  = 0
+        If *pMemBuffer
+          FreeMemory(*pMemBuffer)
+        EndIf
+        *pMemBuffer = AllocateMemory(plBytesToRead)
+        ReadEventLog_(\hEventLog,#EVENTLOG_FORWARDS_READ|#EVENTLOG_SEEK_READ, Num, *pMemBuffer, plBytesToRead, @plBytesRead, @plMinBytesToRead)
+        CopyMemory(*pMemBuffer, pEventRecord, SizeOf(EVENTLOGRECORD))
+        psSrcName  = PeekS(*pMemBuffer + SizeOf(EVENTLOGRECORD))
+        CompilerIf #PB_Compiler_Unicode = #True
+          plResult   = *pMemBuffer + SizeOf(EVENTLOGRECORD) + 1 + Len(psSrcName) * 2
+        CompilerElse
+          plResult   = *pMemBuffer + SizeOf(EVENTLOGRECORD) + 1 + Len(psSrcName)
+        CompilerEndIf
+        ProcedureReturn PeekS(plResult, 15)
       Else
-        ProcedureReturn PeekS(\CurItemLog+SizeOf(EVENTLOGRECORD)+(1+Len(REventLog_GetSourceName(ID, Num))),15)
+        ProcedureReturn ""
       EndIf
     EndWith
   EndIf
 EndProcedure
 ProcedureDLL.s REventLog_GetCategory(ID.l, Num.l)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
-  Protected EventRecord.EVENTLOGRECORD
-  Protected Exec.s, Key.s
+  Protected pEventRecord.EVENTLOGRECORD
+  Protected plBytesToRead.l, plBytesRead.l, plMinBytesToRead.l
+  Protected psExec.s, psKey.s
+  Protected *pMemBuffer
   If *RObject
     With *RObject
-      REventLog_ReadEvent(ID, Num)
-      CopyMemory(\CurItemLog, EventRecord, SizeOf(EVENTLOGRECORD))
-      If EventRecord\EventCategory
-        Exec = PeekS(\CurItemLog + 56)
-        If Exec
-          Key = RMisc_ReadRegKey(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\LogName+"\"+Exec, "CategoryMessageFile")
-          If Key
-            Key = ReplaceString(Key, "%SystemRoot%", GetEnvironmentVariable("systemroot"))
-            ProcedureReturn RMisc_ReadMessageTable(Key, EventRecord\EventCategory)
+      If \hEventLog
+        plBytesToRead     = 5000 ; SizeOf(EVENTLOGRECORD)
+        plBytesRead       = 0
+        plMinBytesToRead  = 0
+        If *pMemBuffer
+          FreeMemory(*pMemBuffer)
+        EndIf
+        *pMemBuffer = AllocateMemory(plBytesToRead)
+        ReadEventLog_(\hEventLog,#EVENTLOG_FORWARDS_READ|#EVENTLOG_SEEK_READ, Num, *pMemBuffer, plBytesToRead, @plBytesRead, @plMinBytesToRead)
+        CopyMemory(*pMemBuffer, pEventRecord, SizeOf(EVENTLOGRECORD))
+        If pEventRecord\EventCategory
+          psExec = PeekS(*pMemBuffer + 56)
+          If psExec
+            psKey = RMisc_ReadRegKey(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\" + \sLogName + "\" + psExec, "CategoryMessageFile")
+            If psKey
+              psKey = ReplaceString(psKey, "%SystemRoot%", GetEnvironmentVariable("systemroot"))
+              ProcedureReturn RMisc_ReadMessageTable(psKey, pEventRecord\EventCategory)
+            EndIf
           EndIf
+        Else
+          ProcedureReturn "None"
         EndIf
       Else
-        ProcedureReturn "None"
+        ProcedureReturn ""
       EndIf
     EndWith
   EndIf
 EndProcedure
 ProcedureDLL.s REventLog_GetUserName(ID.l, Num.l)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
-  Protected EventRecord.EVENTLOGRECORD
-  Protected lUserNameSize   = 256
-  Protected lDomainSize     = 256
-  Protected strUserName.s   = Space(lUserNameSize)
-  Protected strDomainName.s = Space(lDomainSize)
-  Protected lAccountType = 0
-
-  With *RObject
-    If *RObject
-      REventLog_ReadEvent(ID, Num)
-      CopyMemory(\CurItemLog, EventRecord, SizeOf(EVENTLOGRECORD))
-      If EventRecord\UserSidLength > 0
-        pSID = \CurItemLog + EventRecord\UserSidOffset
-        If LookupAccountSid_(#Null, pSID, strUsername, @lUsernameSize, strDomainName, @lDomainSize, @lAccountType)
-          LocalFree_(pSID)
-          ProcedureReturn strDomainname+"\"+strUsername
+  Protected pEventRecord.EVENTLOGRECORD
+  Protected plBytesToRead.l, plBytesRead.l, plMinBytesToRead.l, plUserNameSize.l, plDomainSize.l, plAccountType.l, plSID.l
+  Protected psUserName.s, psDomainName.s
+  Protected *pMemBuffer
+  If *RObject
+    With *RObject
+      If \hEventLog
+        plBytesToRead     = 5000 ; SizeOf(EVENTLOGRECORD)
+        plBytesRead       = 0
+        plMinBytesToRead  = 0
+        plAccountType     = 0
+        plUserNameSize    = 256
+        plDomainSize      = 256
+        psUserName        = Space(plUserNameSize)
+        psDomainName      = Space(plDomainSize)
+        If *pMemBuffer
+          FreeMemory(*pMemBuffer)
+        EndIf
+        *pMemBuffer = AllocateMemory(plBytesToRead)
+        ReadEventLog_(\hEventLog,#EVENTLOG_FORWARDS_READ|#EVENTLOG_SEEK_READ, Num, *pMemBuffer, plBytesToRead, @plBytesRead, @plMinBytesToRead)
+        CopyMemory(*pMemBuffer, pEventRecord, SizeOf(EVENTLOGRECORD))
+        If pEventRecord\UserSidLength > 0
+          plSID = *pMemBuffer + pEventRecord\UserSidOffset
+          If LookupAccountSid_(#Null, plSID, psUsername, @plUsernameSize, psDomainName, @plDomainSize, @plAccountType)
+            LocalFree_(plSID)
+            ProcedureReturn psDomainname + "\" + psUsername
+          Else
+            ProcedureReturn ""
+          EndIf
         Else
           ProcedureReturn ""
         EndIf
       Else
         ProcedureReturn ""
       EndIf
-    Else
-      ProcedureReturn ""
-    EndIf
-  EndWith
+    EndWith
+  EndIf
 EndProcedure
 ProcedureDLL.s REventLog_GetDescription(ID.l, Num.l)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
-  Protected EventRecord.EVENTLOGRECORD
-  Protected P_EventMessageFile.s, P_SourceName.s, Description.s, StrLine.s
-  Protected P_hDLL.l, P_DescBuffer.l, Inc.l, P_EventID.l, P_LenDescBuffer.l
-  Protected NbStr.w
-  Protected BufStr.l
-  If *RObject
-    With *RObject
-      REventLog_ReadEvent(ID, Num)
-      CopyMemory(\CurItemLog, EventRecord, SizeOf(EVENTLOGRECORD))
+  Protected pEventRecord.EVENTLOGRECORD
+  Protected plBytesToRead.l, plBytesRead.l, plMinBytesToRead.l, plDLL.l, plDescBuffer.l, plInc.l, plEventID.l, plLenDescBuffer.l, plBufStr.l
+  Protected psEventMessageFile.s, psSourceName.s, psDescription.s
+  Protected pwNbStr.w
+  Protected *pMemBuffer
 
-      P_SourceName        = REventLog_GetSourceName(ID, Num)
-      P_EventID           = REventLog_GetEventID(ID, Num)
-      P_EventMessageFile  = RMisc_ReadMultiLineString(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\LogName+"\"+P_SourceName, "EventMessageFile")
-      If FindString(LCase(P_EventMessageFile),"%systemroot%",1)>0
-        P_EventMessageFile = ReplaceString(LCase(P_EventMessageFile), "%systemroot%", GetEnvironmentVariable("systemroot"))
-      EndIf
-      P_hDLL              = LoadLibrary_(P_EventMessageFile)
-      NbStr               = PeekW(\CurItemLog + 26)
-      BufStr              = \CurItemLog + PeekL(\CurItemLog + 36)
-      
-      ; Arrays of values for replacing %1, %2, %3, %etc...
-      Protected Dim DimStr.s(NbStr)
-      For Inc = 1 To NbStr
-        DimStr(Inc-1) = PeekS(BufStr)
-        BufStr        = BufStr + Len(DimStr(Inc-1)) * SizeOf(Character) + SizeOf(Character)
-      Next
-      
-      ; Description of Item 
-      If P_hDLL
-        FormatMessage_(#FORMAT_MESSAGE_ARGUMENT_ARRAY|#FORMAT_MESSAGE_ALLOCATE_BUFFER|#FORMAT_MESSAGE_FROM_SYSTEM|#FORMAT_MESSAGE_FROM_HMODULE,P_hDLL,P_EventID,#Null,@P_DescBuffer,P_LenDescBuffer,@DimStr())
-        FreeLibrary_(P_hDLL)
-        If P_DescBuffer
-          Description = PeekS(P_DescBuffer)
-          LocalFree_(P_DescBuffer)
+  If *RObject
+    With *RObject
+      If \hEventLog
+        plBytesToRead     = 5000 ; SizeOf(EVENTLOGRECORD)
+        plBytesRead       = 0
+        plMinBytesToRead  = 0
+        
+        If *pMemBuffer
+          FreeMemory(*pMemBuffer)
         EndIf
+        *pMemBuffer = AllocateMemory(plBytesToRead)
+        ReadEventLog_(\hEventLog,#EVENTLOG_FORWARDS_READ|#EVENTLOG_SEEK_READ, Num, *pMemBuffer, plBytesToRead, @plBytesRead, @plMinBytesToRead)
+        CopyMemory(*pMemBuffer, pEventRecord, SizeOf(EVENTLOGRECORD))
+        psSourceName        = PeekS(*pMemBuffer+SizeOf(EVENTLOGRECORD))
+        plEventID           = pEventRecord\EventID
+        psEventMessageFile  = RMisc_ReadMultiLineString(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\sLogName+"\"+psSourceName, "EventMessageFile")
+        If FindString(LCase(psEventMessageFile),"%systemroot%",1)>0
+          psEventMessageFile = ReplaceString(LCase(psEventMessageFile), "%systemroot%", GetEnvironmentVariable("systemroot"))
+        EndIf
+        plDLL               = LoadLibrary_(psEventMessageFile)
+        pwNbStr             = PeekW(*pMemBuffer + 26)
+        plBufStr            = *pMemBuffer + PeekL(*pMemBuffer + 36)
+        
+        ; Arrays of values for replacing %1, %2, %3, %etc...
+        Protected Dim pDimStr.s(pwNbStr)
+        For plInc = 1 To pwNbStr
+          pDimStr(plInc - 1)  = PeekS(plBufStr)
+          plBufStr            = plBufStr + Len(pDimStr(plInc-1)) * SizeOf(Character) + SizeOf(Character)
+        Next
+        
+        ; Description of Item 
+        If plDLL
+          FormatMessage_(#FORMAT_MESSAGE_ARGUMENT_ARRAY|#FORMAT_MESSAGE_ALLOCATE_BUFFER|#FORMAT_MESSAGE_FROM_SYSTEM|#FORMAT_MESSAGE_FROM_HMODULE, plDLL, plEventID, #Null, @plDescBuffer, plLenDescBuffer, @pDimStr())
+          FreeLibrary_(plDLL)
+          If plDescBuffer
+            psDescription = PeekS(plDescBuffer)
+            LocalFree_(plDescBuffer)
+          EndIf
+        EndIf
+        ProcedureReturn psDescription
+      Else
+        ProcedureReturn ""
       EndIf
-      ProcedureReturn Description
     EndWith
   EndIf
 EndProcedure
 
-ProcedureDLL REventLog_CreateLog(ID.l, LogName.s)
+ProcedureDLL.l REventLog_CreateLog(ID.l, sLogName.s)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
   If *RObject
     With *RObject
-      If LogName <> "" And RMisc_KeyExists(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+LogName, "") <> #True
-        RMisc_WriteRegKey(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+LogName)
-        REventLog_Open(ID, LogName)
-        \LogName = LogName
-        ProcedureReturn #True
-      Else
-        ProcedureReturn #False
-      EndIf
-    EndWith
-  EndIf
-EndProcedure
-ProcedureDLL REventLog_CreateSource(ID.l, SourceName.s)
-  Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
-  Protected ReadSources.s
-  If *RObject
-    With *RObject
-      If \LogName <> "" And RMisc_KeyExists(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\LogName+"\"+SourceName) <> #True
-        ReadSources = RMisc_ReadMultiLineString(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\LogName,"Sources")
-        If Readsources = ""
-          ReadSources = \LogName
+      If sLogName <> "" 
+        If RMisc_KeyExists(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+sLogName, "") <> #True
+          RMisc_WriteRegKey(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+sLogName)
+          REventLog_Open(ID, sLogName)
+          \sLogName = sLogName
+          ProcedureReturn #True
+        Else
+          ProcedureReturn #False
         EndIf
-        If FindString(ReadSources, SourceName, 1) = 0
-          RMisc_WriteMultiLineString(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\LogName, "Sources", SourceName+#LF$+ReadSources)
+      Else
+        ProcedureReturn #False
+      EndIf
+    EndWith
+  EndIf
+EndProcedure
+ProcedureDLL.l REventLog_CreateSource(ID.l, sSourceName.s)
+  Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
+  Protected sReadSources.s
+  If *RObject
+    With *RObject
+      If \sLogName <> "" 
+        If RMisc_KeyExists(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\" + \sLogName + "\" + sSourceName) <> #True
+          sReadSources = RMisc_ReadMultiLineString(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\" + \sLogName, "Sources")
+          If sReadSources = ""
+            sReadSources = \sLogName
+          EndIf
+          If FindString(sReadSources, sSourceName, 1) = 0
+            RMisc_WriteMultiLineString(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\" + \sLogName, "Sources", sSourceName + #LF$ + sReadSources)
+          EndIf
+          ProcedureReturn RMisc_WriteRegKey(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\" + \sLogName + "\" + sSourceName)
+        Else
+          ProcedureReturn #False
         EndIf
-        ProcedureReturn RMisc_WriteRegKey(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\LogName+"\"+SourceName)
       Else
         ProcedureReturn #False
       EndIf
     EndWith
   EndIf
 EndProcedure
-ProcedureDLL REventLog_SetDLLCategory(ID.l, SourceName.s, NbCat.l, DLLCategory.s)
+ProcedureDLL.l REventLog_SetDLLCategory(ID.l, sSourceName.s, lNbCat.l, sDLLCategory.s)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
   If *RObject
     With *RObject
-      If \LogName <> "" And RMisc_KeyExists(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\LogName+"\"+SourceName, "") = #True
-        RMisc_SetValue(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\LogName+"\"+SourceName, "CategoryCount", Str(NbCat), #REG_DWORD, "")
-        ProcedureReturn RMisc_SetValue(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\LogName+"\"+SourceName, "CategoryMessageFile", DLLCategory, #REG_SZ, "")
+      If \sLogName <> "" 
+        If RMisc_KeyExists(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\sLogName+"\"+sSourceName, "") = #True
+          RMisc_SetValue(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\sLogName+"\"+sSourceName, "CategoryCount", Str(lNbCat), #REG_DWORD, "")
+          ProcedureReturn RMisc_SetValue(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\sLogName+"\"+sSourceName, "CategoryMessageFile", sDLLCategory, #REG_SZ, "")
+        Else
+          ProcedureReturn #False
+        EndIf
       Else
         ProcedureReturn #False
       EndIf
     EndWith
   EndIf
 EndProcedure
-ProcedureDLL REventLog_SetDLLEventMessage(ID.l, SourceName.s, DLLEventMessage.s)
+ProcedureDLL.l REventLog_SetDLLEventMessage(ID.l, sSourceName.s, sDLLEventMessage.s)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
   If *RObject
     With *RObject
-      If \LogName <> "" And RMisc_KeyExists(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\LogName+"\"+SourceName, "") = #True
-        ProcedureReturn RMisc_SetValue(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\LogName+"\"+SourceName, "EventMessageFile", DLLEventMessage, #REG_SZ, "")
+      If \sLogName <> "" 
+        If RMisc_KeyExists(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\sLogName+"\"+sSourceName, "") = #True
+          ProcedureReturn RMisc_SetValue(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+\sLogName+"\"+sSourceName, "EventMessageFile", sDLLEventMessage, #REG_SZ, "")
+        Else
+          ProcedureReturn #False
+        EndIf
       Else
         ProcedureReturn #False
       EndIf
     EndWith
   EndIf
 EndProcedure
-ProcedureDLL REventLog_Report(ID.l, Source.s, Category.w, Type.l, MessageID.l, MessageParam.s="")
+;@todo : attendre que Moebius gère les param facultatifs pour ', MessageParam.s=""'
+ProcedureDLL.l REventLog_Report(ID.l, sSource.s, wCategory.w, lType.l, lMessageID.l, sMessageParam.s)
   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
+  Protected plhHandle.l, plNbStrings.l, plhSid.l
+  Protected pbInc.b
   If *RObject
     With *RObject
-      Protected hHandle.l
-      Protected NbStrings.l
       ; Get a handle To the event log.
-      hHandle = RegisterEventSource_(#Null, Source)
-      If hHandle = #Null
+      plhHandle = RegisterEventSource_(#Null, sSource)
+      If plhHandle = #Null
         ProcedureReturn #REVENTLOG_ERROR_BADLOGNAME
       Else
-        NbStrings = CountString(MessageParam, ";")+1
-        Protected Dim Strings.s(NbStrings-1)
-        Protected Inc.b
-        Protected hSid.l
-        For Inc = 0 To NbStrings - 1
-          Strings(Inc) = StringField(MessageParam, Inc, ";")
+        plNbStrings = CountString(sMessageParam, ";")+1
+        Protected Dim pDimStrings.s(plNbStrings - 1)
+        For pbInc = 0 To plNbStrings - 1
+          pDimStrings(pbInc) = StringField(sMessageParam, pbInc, ";")
         Next
         ; Report the event
-        If ReportEvent_(hHandle, Type, Category, MessageID, hSid, NbStrings, 0, @Strings(),0) <> 0
-          DeregisterEventSource_(hHandle)
+        If ReportEvent_(plhHandle, lType, wCategory, lMessageID, plhSid, plNbStrings, 0, @pDimStrings(),0) <> 0
+          DeregisterEventSource_(plhHandle)
           ProcedureReturn #REVENTLOG_SUCCESS
         Else
           ProcedureReturn #REVENTLOG_ERROR_LAST
@@ -563,37 +696,23 @@ ProcedureDLL REventLog_Report(ID.l, Source.s, Category.w, Type.l, MessageID.l, M
   EndIf
 EndProcedure
 
-ProcedureDLL.l REventLog_ExistsSource(LogName.s, SourceName.s)
-  ProcedureReturn RMisc_KeyExists(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+LogName+"\"+SourceName)
+ProcedureDLL.l REventLog_ExistsSource(sLogName.s, sSourceName.s)
+  ProcedureReturn RMisc_KeyExists(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+sLogName+"\"+sSourceName)
 EndProcedure
-ProcedureDLL.l REventLog_ExistsLog(LogName.s)
-  ProcedureReturn RMisc_KeyExists(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+LogName, "")
+ProcedureDLL.l REventLog_ExistsLog(sLogName.s)
+  ProcedureReturn RMisc_KeyExists(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+sLogName, "")
 EndProcedure
-ProcedureDLL.l REventLog_ExistsDLLCategory(LogName.s, SourceName.s)
-  If RMisc_ReadMultiLineString(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+LogName+"\"+SourceName, "CategoryMessageFile") = ""
+ProcedureDLL.l REventLog_ExistsDLLCategory(sLogName.s, sSourceName.s)
+  If RMisc_ReadMultiLineString(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+sLogName+"\"+sSourceName, "CategoryMessageFile") = ""
     ProcedureReturn #False
   Else
     ProcedureReturn #True
   EndIf
 EndProcedure
-ProcedureDLL.l REventLog_ExistsDLLEventMessage(LogName.s, SourceName.s)
-  If RMisc_ReadMultiLineString(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+LogName+"\"+SourceName, "EventMessageFile") = ""
+ProcedureDLL.l REventLog_ExistsDLLEventMessage(sLogName.s, sSourceName.s)
+  If RMisc_ReadMultiLineString(#HKEY_LOCAL_MACHINE, "SYSTEM\CurrentControlSet\Services\Eventlog\"+sLogName+"\"+sSourceName, "EventMessageFile") = ""
     ProcedureReturn #False
   Else
     ProcedureReturn #True
   EndIf
 EndProcedure
-
-; ProcedureDLL REventLog_(ID.l)
-;   Protected *RObject.S_REventLog = REVENTLOG_ID(ID)
-;   If *RObject
-;     With *RObject
-;     EndWith
-;   EndIf
-; EndProcedure
-
-
-; IDE Options = PureBasic 4.10 (Windows - x86)
-; CursorPosition = 361
-; FirstLine = 8
-; Folding = AAAAAAAAAAAAAY4HAAAAAA5

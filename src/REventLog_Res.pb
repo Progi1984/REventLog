@@ -21,30 +21,28 @@ EndEnumeration
 Structure S_REventLog
   hEventLog.l
   CurItemLog.l
-  LogName.s
+  sLogName.s
 EndStructure
 
 ;- Macros
-Macro REVENTLOG_ID(EventLog)
-  Object_GetObject(REventLogObjects, EventLog)
+Macro REVENTLOG_ID(object)
+  Object_GetObject(REventLogObjects, object)
 EndMacro
-Macro REVENTLOG_IS(EventLog)
-  Object_IsObject(REventLogObjects, EventLog) 
+Macro REVENTLOG_IS(object)
+  Object_IsObject(REventLogObjects, object)
 EndMacro
-Macro REVENTLOG_NEW(EventLog)
-  Object_GetOrAllocateID(REventLogObjects, EventLog)
+Macro REVENTLOG_NEW(object)
+  Object_GetOrAllocateID(REventLogObjects, object)
 EndMacro
-Macro REVENTLOG_FREEID(EventLog)
-  If EventLog <> #PB_Any And REVENTLOG_IS(EventLog) = #True
-    Object_FreeID(REventLogObjects, EventLog)
+Macro REVENTLOG_FREEID(object)
+  If object <> #PB_Any And REVENTLOG_IS(object) = #True
+    Object_FreeID(REventLogObjects, object)
   EndIf
 EndMacro
-Macro REVENTLOG_INITIALIZE(hCloseFunction)
-  Object_Init(SizeOf(S_REventLog), 1, hCloseFunction)
+Macro REVENTLOG_INITIALIZE(PtrCloseFn)
+  Object_Init(SizeOf(S_REventLog), 1, PtrCloseFn)
 EndMacro
 
 
 
-; IDE Options = PureBasic 4.10 (Windows - x86)
-; CursorPosition = 16
-; Folding = D+
+
